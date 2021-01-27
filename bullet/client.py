@@ -109,7 +109,8 @@ class myInput:
 @keyhandler.init
 class Bullet:
     def __init__(
-            self, 
+            self,
+            key: str                  = "",
             prompt: str               = "",
             choices: list             = [], 
             bullet: str               = "●", 
@@ -134,6 +135,7 @@ class Bullet:
             raise ValueError("Margin must be > 0!")
 
         self.prompt = prompt
+        self.key = key
         self.choices = choices
         self.pos = 0
 
@@ -231,6 +233,7 @@ class Bullet:
 class Check:
     def __init__(
             self, 
+            key: str                  = "",
             prompt: str               = "",
             choices: list             = [], 
             check: str                = "√", 
@@ -256,6 +259,7 @@ class Check:
             raise ValueError("Margin must be > 0!")
 
         self.prompt = prompt
+        self.key = key
         self.choices = choices
         self.checked = [False] * len(self.choices)
         self.pos = 0
@@ -368,12 +372,14 @@ class YesNo:
     def __init__(
             self,
             prompt,
+            key = "",
             default="y",
             indent=0,
             word_color=colors.foreground["default"],
             prompt_prefix="[y/n] "
         ):
         self.indent = indent
+        self.key = key
         if not prompt:
             raise ValueError("Prompt can not be empty!")
         if default.lower() not in ["y", "n"]:
@@ -389,14 +395,14 @@ class YesNo:
         if "yes".startswith(ans) or "no".startswith(ans):
             return True
         utils.moveCursorUp(1)
-        utils.forceWrite(' ' * self.indent + self.prompt + self.default)
+        utils.forceWrite(' ' * self.indent + f"{self.prompt} {self.default}")
         utils.forceWrite(' ' * len(ans))
         utils.forceWrite('\b' * len(ans))
         return False
 
     def launch(self):
         my_input = myInput(word_color = self.word_color)
-        utils.forceWrite(' ' * self.indent + self.prompt + self.default)
+        utils.forceWrite(' ' * self.indent + f"{self.prompt} {self.default}")
         while True:
             ans = my_input.input()
             if ans == "":
@@ -410,6 +416,7 @@ class Input:
     def __init__(
             self, 
             prompt,
+            key = "",
             default = "",
             indent = 0, 
             word_color = colors.foreground["default"],
@@ -417,9 +424,10 @@ class Input:
             pattern = ""
         ):
         self.indent = indent
+        self.key = key
         if not prompt:
             raise ValueError("Prompt can not be empty!")
-        self.default = "[{}]".format(default) if default else ""
+        self.default = default
         self.prompt = prompt
         self.word_color = word_color
         self.strip = strip
@@ -430,24 +438,24 @@ class Input:
             return False
         if not bool(re.match(self.pattern, ans)):
             utils.moveCursorUp(1)
-            utils.forceWrite(' ' * self.indent + self.prompt + self.default)
+            utils.forceWrite(' ' * self.indent + f"{self.prompt} [{self.default}] ")
             utils.forceWrite(' ' * len(ans))
             utils.forceWrite('\b' * len(ans))
             return False
         return True
 
     def launch(self):
-        utils.forceWrite(' ' * self.indent + self.prompt + self.default)
+        utils.forceWrite(' ' * self.indent + f"{self.prompt} [{self.default}] ")
         sess = myInput(word_color = self.word_color)
         if not self.pattern:
             while True:
                 result = sess.input()
                 if result == "":
                     if self.default != "":
-                        return self.default[1:-1]
+                        return self.default
                     else:
                         utils.moveCursorUp(1)
-                        utils.forceWrite(' ' * self.indent + self.prompt + self.default)
+                        utils.forceWrite(' ' * self.indent + f"{self.prompt} [{self.default}] ")
                         utils.forceWrite(' ' * len(result))
                         utils.forceWrite('\b' * len(result))
                 else:
@@ -455,6 +463,12 @@ class Input:
         else:
             while True:
                 result = sess.input()
+
+                if result == "":
+                    if self.default != "":
+                        result = self.default
+
+                print(f"result {result}")
                 if self.valid(result):
                     break
         return result.strip() if self.strip else result
@@ -462,12 +476,14 @@ class Input:
 class Password:
     def __init__(
             self, 
-            prompt, 
+            prompt,
+            key = "",
             indent = 0, 
             hidden = '*', 
             word_color = colors.foreground["default"]
         ):
         self.indent = indent
+        self.key = key
         if not prompt:
             raise ValueError("Prompt can not be empty!")
         self.prompt = prompt
@@ -481,12 +497,14 @@ class Password:
 class Numbers:
     def __init__(
             self, 
-            prompt, 
+            prompt,
+            key = "",
             indent = 0, 
             word_color = colors.foreground["default"],
             type = float
         ):
         self.indent = indent
+        self.key = key
         if not prompt:
             raise ValueError("Prompt can not be empty!")
         self.prompt = prompt
@@ -524,7 +542,7 @@ class Numbers:
 class VerticalPrompt:
     def __init__(
             self, 
-            components, 
+            components,
             spacing = 1, 
             separator = "",
             separator_color = colors.foreground["default"]
@@ -537,15 +555,21 @@ class VerticalPrompt:
         self.separator = separator
         self.separator_color = separator_color
         self.separator_len = len(max(self.components, key = lambda ui: len(ui.prompt)).prompt)
-        self.result = []
+        self.result = {}
 
     def summarize(self):
-        for prompt, answer in self.result:
+        for prompt, answer in self.result.items():
             print(prompt, answer)
         
     def launch(self):
         for ui in self.components:
-            self.result.append((ui.prompt, ui.launch()))
+            keyVal = ui.prompt
+
+            # Use key if provided
+            if hasattr(ui, 'key'):
+                keyVal = ui.key
+
+            self.result[keyVal] = ui.launch()
             if not self.separator:
                 utils.forceWrite("\n" * self.spacing)
             else:
@@ -718,15 +742,21 @@ class SlidePrompt:
         self.components = components
         if not components:
             raise ValueError("Prompt components cannot be empty!")
-        self.result = []
+        self.result = {}
 
     def summarize(self):
-        for prompt, answer in self.result:
+        for prompt, answer in self.result.items():
             print(prompt, answer)
 
     def launch(self):
         for ui in self.components:
-            self.result.append((ui.prompt, ui.launch()))
+            keyVal = ui.prompt
+
+            # Use key if provided
+            if hasattr(ui, 'key'):
+                keyVal = ui.key  
+
+            self.result[keyVal] = ui.launch()
             d = 1
             if type(ui).__name__ == "Bullet" or type(ui).__name__ == "Check":
                 d = 1 + ui.shift + len(ui.choices)
