@@ -4,7 +4,7 @@ from . import colors
 from . import utils
 from . import cursor
 from . import keyhandler
-import readline
+#import readline
 import re
 
 # Reusable private utility class
